@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zip Compressor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-top: 40px;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+        
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #4299e1;
+            background-color: #ebf8ff;
+        }
+        
+        .upload-area p {
+            margin-bottom: 15px;
+            color: #718096;
+        }
+        
+        .btn {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .btn:hover {
+            background-color: #3182ce;
+        }
+        
+        .btn:disabled {
+            background-color: #a0aec0;
+            cursor: not-allowed;
+        }
+        
+        .file-list {
+            margin: 20px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #f7fafc;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding-right: 10px;
+        }
+        
+        .file-size {
+            color: #718096;
+            font-size: 14px;
+            min-width: 70px;
+            text-align: right;
+        }
+        
+        .remove-btn {
+            background: none;
+            border: none;
+            color: #e53e3e;
+            cursor: pointer;
+            font-size: 18px;
+            margin-left: 10px;
+        }
+        
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background-color: #edf2f7;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background-color: #4299e1;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .status {
+            margin-top: 8px;
+            text-align: center;
+            color: #718096;
+        }
+        
+        .download-container {
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .download-btn {
+            background-color: #48bb78;
+        }
+        
+        .download-btn:hover {
+            background-color: #38a169;
+        }
+        
+        .error {
+            color: #e53e3e;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .upload-area {
+                padding: 20px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Browser Zip Compressor</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>Drag & drop files here or click to select files</p>
+            <button class="btn" id="selectBtn">Select Files</button>
+            <input type="file" id="fileInput" multiple style="display: none;">
+        </div>
+        
+        <div class="file-list" id="fileList"></div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <div class="status" id="status">Compressing files...</div>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="download-container" id="downloadContainer">
+            <button class="btn download-btn" id="downloadBtn">Download Zip File</button>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="btn" id="compressBtn" disabled>Compress Files</button>
+        </div>
+    </div>
+
+    <!-- Include JSZip library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <script>
+        // DOM elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const selectBtn = document.getElementById('selectBtn');
+        const fileList = document.getElementById('fileList');
+        const compressBtn = document.getElementById('compressBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progress');
+        const statusText = document.getElementById('status');
+        const downloadContainer = document.getElementById('downloadContainer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorElement = document.getElementById('error');
+        
+        // Store selected files
+        let selectedFiles = [];
+        let zipBlob = null;
+        
+        // Event listeners
+        selectBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+        compressBtn.addEventListener('click', compressFiles);
+        downloadBtn.addEventListener('click', downloadZip);
+        
+        // Drag and drop events
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+        
+        // Handle file selection
+        function handleFileSelect(e) {
+            handleFiles(e.target.files);
+            fileInput.value = ''; // Reset file input
+        }
+        
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            for (const file of files) {
+                if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                    selectedFiles.push(file);
+                }
+            }
+            
+            updateFileList();
+            updateCompressButton();
+        }
+        
+        // Update the file list UI
+        function updateFileList() {
+            fileList.innerHTML = '';
+            
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                
+                const fileName = document.createElement('div');
+                fileName.className = 'file-name';
+                fileName.textContent = file.name;
+                
+                const fileSize = document.createElement('div');
+                fileSize.className = 'file-size';
+                fileSize.textContent = formatFileSize(file.size);
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.addEventListener('click', () => removeFile(index));
+                
+                fileItem.appendChild(fileName);
+                fileItem.appendChild(fileSize);
+                fileItem.appendChild(removeBtn);
+                fileList.appendChild(fileItem);
+            });
+        }
+        
+        // Remove a file from the list
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+            updateCompressButton();
+        }
+        
+        // Update compress button state
+        function updateCompressButton() {
+            compressBtn.disabled = selectedFiles.length === 0;
+        }
+        
+        // Format file size for display
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Compress files into a zip
+        async function compressFiles() {
+            if (selectedFiles.length === 0) return;
+            
+            // Reset UI
+            progressContainer.style.display = 'block';
+            downloadContainer.style.display = 'none';
+            errorElement.style.display = 'none';
+            compressBtn.disabled = true;
+            progressBar.style.width = '0%';
+            statusText.textContent = 'Preparing to compress...';
+            
+            try {
+                const zip = new JSZip();
+                
+                // Add files to zip
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    zip.file(file.name, file);
+                    
+                    // Update progress
+                    const progress = Math.round(((i + 1) / selectedFiles.length) * 50);
+                    progressBar.style.width = progress + '%';
+                    statusText.textContent = `Adding file ${i + 1} of ${selectedFiles.length}...`;
+                    
+                    // Allow UI to update
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                // Generate zip
+                statusText.textContent = 'Generating zip file...';
+                zipBlob = await zip.generateAsync({ 
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 6 },
+                }, (metadata) => {
+                    const progress = 50 + Math.round(metadata.percent / 2);
+                    progressBar.style.width = progress + '%';
+                });
+                
+                // Complete
+                progressBar.style.width = '100%';
+                statusText.textContent = 'Compression complete!';
+                downloadContainer.style.display = 'block';
+                compressBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('Compression error:', error);
+                errorElement.textContent = 'Error compressing files. Please try again.';
+                errorElement.style.display = 'block';
+                compressBtn.disabled = false;
+            }
+        }
+        
+        // Download the zip file
+        function downloadZip() {
+            if (!zipBlob) return;
+            
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'compressed_files.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
